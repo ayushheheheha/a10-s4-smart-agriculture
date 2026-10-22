@@ -18,8 +18,16 @@
   tr.dry td { background: #fdecea; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: bold; color: #fff; }
   .Good { background: #2e7d32; } .Fair { background: #f9a825; color: #222; } .Poor { background: #c62828; }
+  .Critical { background: #b71c1c; } .High { background: #e65100; } .Medium { background: #f9a825; color: #222; } .Low { background: #2e7d32; }
   .alert { background: #fdecea; border-left: 6px solid #c62828; padding: 10px 14px; margin-bottom: 8px; font-size: 14px; }
   .ok { background: #e8f5e9; border-left-color: #2e7d32; }
+  .cards { display: flex; gap: 12px; flex-wrap: wrap; }
+  .card { flex: 1; min-width: 200px; background: #f4f9f3; border: 1px solid #dbe6d9; border-radius: 6px; padding: 12px; }
+  .card b { display: block; font-size: 22px; color: #2e6b34; margin-top: 4px; }
+  .filters label { margin-right: 18px; font-size: 14px; }
+  select { padding: 4px 8px; font-size: 14px; }
+  .bar { background: #dbe6d9; border-radius: 6px; height: 14px; margin-top: 6px; }
+  .bar span { display: block; height: 14px; border-radius: 6px; background: #2e7d32; }
   footer { text-align: center; font-size: 13px; color: #55645a; padding: 14px; }
 </style>
 </head>
@@ -34,12 +42,39 @@
     <div id="alerts"></div>
   </section>
   <section>
+    <h2>Water Analytics</h2>
+    <div class="cards">
+      <div class="card">Total water consumption<b id="cWater"></b></div>
+      <div class="card">Lowest soil moisture<b id="cLow"></b></div>
+      <div class="card">Fields needing irrigation<b id="cNeed"></b></div>
+      <div class="card">Irrigation completion<b id="cDone"></b><div class="bar"><span id="bDone"></span></div></div>
+    </div>
+  </section>
+  <section>
     <h2>Field Status</h2>
+    <p class="filters">
+      <label>Field: <select id="fField" onchange="render()"><option>All</option><option>F-01</option><option>F-02</option><option>F-03</option><option>F-04</option><option>F-05</option><option>F-06</option></select></label>
+      <label>Irrigation status: <select id="fStatus" onchange="render()"><option>All</option><option>Not required</option><option>Scheduled</option><option>In progress</option><option>Completed</option></select></label>
+    </p>
     <table>
       <thead>
         <tr><th>Field ID</th><th>Crop Type</th><th>Soil Moisture (%)</th><th>Water Use (L/day)</th><th>Temperature (&deg;C)</th><th>Irrigation Status</th><th>Next Irrigation</th><th>Crop Health</th></tr>
       </thead>
       <tbody id="rows"></tbody>
+    </table>
+  </section>
+  <section>
+    <h2>Irrigation Priority</h2>
+    <table>
+      <thead><tr><th>Rank</th><th>Field ID</th><th>Crop Type</th><th>Soil Moisture (%)</th><th>Priority</th><th>Recommendation</th></tr></thead>
+      <tbody id="priority"></tbody>
+    </table>
+  </section>
+  <section>
+    <h2>Water-Saving Targets</h2>
+    <table>
+      <thead><tr><th>Field ID</th><th>Current Use (L/day)</th><th>Saving Target</th><th>Target Use (L/day)</th><th>Water to Save (L/day)</th></tr></thead>
+      <tbody id="targets"></tbody>
     </table>
   </section>
 </main>
@@ -54,17 +89,53 @@
     { id: 'F-05', crop: 'Sugarcane', moisture: 36, water: 3100, temp: 28, status: 'Scheduled',    next: '23-Oct-2026 05:30', health: 'Good' },
     { id: 'F-06', crop: 'Tomato',    moisture: 29, water: 900,  temp: 26, status: 'Scheduled',    next: '22-Oct-2026 19:00', health: 'Fair' }
   ];
+  // water-saving target (% of current use) per crop
+  var saving = { Wheat: 10, Rice: 20, Maize: 10, Cotton: 15, Sugarcane: 20, Tomato: 10 };
+
+  function priority(f) { return f.moisture < 25 ? 'Critical' : f.moisture < 30 ? 'High' : f.moisture < 40 ? 'Medium' : 'Low'; }
+  function advice(p) {
+    return { Critical: 'Irrigate immediately', High: 'Irrigate today', Medium: 'Irrigate within 2 days', Low: 'No irrigation needed' }[p];
+  }
 
   function render() {
+    var ff = document.getElementById('fField').value, fs = document.getElementById('fStatus').value;
     var rows = '', alerts = '';
     fields.forEach(function (f) {
       var dry = f.moisture < MOISTURE_LIMIT;
+      if (dry) alerts += '<div class="alert">IRRIGATION ALERT: ' + f.id + ' (' + f.crop + ') soil moisture ' + f.moisture + '% is below ' + MOISTURE_LIMIT + '%</div>';
+      if ((ff !== 'All' && f.id !== ff) || (fs !== 'All' && f.status !== fs)) return;
       rows += '<tr class="' + (dry ? 'dry' : '') + '"><td>' + f.id + '</td><td>' + f.crop + '</td><td>' + f.moisture + '</td><td>' + f.water +
         '</td><td>' + f.temp + '</td><td>' + f.status + '</td><td>' + f.next + '</td><td><span class="badge ' + f.health + '">' + f.health + '</span></td></tr>';
-      if (dry) alerts += '<div class="alert">IRRIGATION ALERT: ' + f.id + ' (' + f.crop + ') soil moisture ' + f.moisture + '% is below ' + MOISTURE_LIMIT + '%</div>';
     });
-    document.getElementById('rows').innerHTML = rows;
+    document.getElementById('rows').innerHTML = rows || '<tr><td colspan="8">No fields match the selected filters.</td></tr>';
     document.getElementById('alerts').innerHTML = alerts || '<div class="alert ok">All fields have sufficient soil moisture.</div>';
+
+    var total = fields.reduce(function (s, f) { return s + f.water; }, 0);
+    var lowest = fields.slice().sort(function (a, b) { return a.moisture - b.moisture; })[0];
+    var need = fields.filter(function (f) { return f.moisture < MOISTURE_LIMIT; }).length;
+    var done = fields.filter(function (f) { return f.status === 'Completed'; }).length;
+    var pct = Math.round(done / fields.length * 100);
+    document.getElementById('cWater').innerHTML = total + ' L/day';
+    document.getElementById('cLow').innerHTML = lowest.id + ' (' + lowest.moisture + '%)';
+    document.getElementById('cNeed').innerHTML = need + ' of ' + fields.length;
+    document.getElementById('cDone').innerHTML = done + ' of ' + fields.length + ' (' + pct + '%)';
+    document.getElementById('bDone').style.width = pct + '%';
+
+    var pr = '', ranked = fields.slice().sort(function (a, b) { return a.moisture - b.moisture; });
+    ranked.forEach(function (f, i) {
+      var p = priority(f);
+      pr += '<tr><td>' + (i + 1) + '</td><td>' + f.id + '</td><td>' + f.crop + '</td><td>' + f.moisture + '</td><td><span class="badge ' + p + '">' + p + '</span></td><td>' + advice(p) + '</td></tr>';
+    });
+    document.getElementById('priority').innerHTML = pr;
+
+    var tg = '', saveTotal = 0;
+    fields.forEach(function (f) {
+      var pc = saving[f.crop], target = Math.round(f.water * (100 - pc) / 100);
+      saveTotal += f.water - target;
+      tg += '<tr><td>' + f.id + '</td><td>' + f.water + '</td><td>' + pc + '%</td><td>' + target + '</td><td>' + (f.water - target) + '</td></tr>';
+    });
+    tg += '<tr><td><b>Total</b></td><td><b>' + total + '</b></td><td></td><td><b>' + (total - saveTotal) + '</b></td><td><b>' + saveTotal + '</b></td></tr>';
+    document.getElementById('targets').innerHTML = tg;
   }
   render();
 </script>
