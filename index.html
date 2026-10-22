@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Agriculture Dashboard</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #eef5ec; margin: 0; color: #1f2d1f; }
+  header { background: #2e6b34; color: #fff; padding: 20px; text-align: center; }
+  header h1 { margin: 0 0 4px; font-size: 26px; }
+  header p { margin: 0; font-size: 14px; }
+  main { max-width: 1100px; margin: 20px auto; padding: 0 14px; }
+  section { background: #fff; border-radius: 6px; padding: 14px 18px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.14); }
+  h2 { margin-top: 0; font-size: 19px; color: #2e6b34; border-bottom: 2px solid #2e6b34; padding-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { border-bottom: 1px solid #dbe6d9; padding: 7px 8px; text-align: left; }
+  th { background: #e4efe2; }
+  tr.dry td { background: #fdecea; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: bold; color: #fff; }
+  .Good { background: #2e7d32; } .Fair { background: #f9a825; color: #222; } .Poor { background: #c62828; }
+  .alert { background: #fdecea; border-left: 6px solid #c62828; padding: 10px 14px; margin-bottom: 8px; font-size: 14px; }
+  .ok { background: #e8f5e9; border-left-color: #2e7d32; }
+  footer { text-align: center; font-size: 13px; color: #55645a; padding: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Smart Agriculture Dashboard</h1>
+  <p>Irrigation Resource Optimization Portal | Irrigation alert when soil moisture is below 30%</p>
+</header>
+<main>
+  <section>
+    <h2>Irrigation Alerts</h2>
+    <div id="alerts"></div>
+  </section>
+  <section>
+    <h2>Field Status</h2>
+    <table>
+      <thead>
+        <tr><th>Field ID</th><th>Crop Type</th><th>Soil Moisture (%)</th><th>Water Use (L/day)</th><th>Temperature (&deg;C)</th><th>Irrigation Status</th><th>Next Irrigation</th><th>Crop Health</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </section>
+</main>
+<footer>Smart Agriculture Portal | Release 0.0.0-dev | Research Centre Control Room</footer>
+<script>
+  var MOISTURE_LIMIT = 30;
+  var fields = [
+    { id: 'F-01', crop: 'Wheat',     moisture: 42, water: 1200, temp: 24, status: 'Not required', next: '25-Oct-2026 06:00', health: 'Good' },
+    { id: 'F-02', crop: 'Rice',      moisture: 27, water: 2600, temp: 27, status: 'Scheduled',    next: '22-Oct-2026 18:00', health: 'Fair' },
+    { id: 'F-03', crop: 'Maize',     moisture: 55, water: 1500, temp: 25, status: 'Completed',    next: '23-Oct-2026 06:00', health: 'Good' },
+    { id: 'F-04', crop: 'Cotton',    moisture: 24, water: 1900, temp: 29, status: 'In progress',  next: '22-Oct-2026 17:00', health: 'Poor' },
+    { id: 'F-05', crop: 'Sugarcane', moisture: 36, water: 3100, temp: 28, status: 'Scheduled',    next: '23-Oct-2026 05:30', health: 'Good' },
+    { id: 'F-06', crop: 'Tomato',    moisture: 29, water: 900,  temp: 26, status: 'Scheduled',    next: '22-Oct-2026 19:00', health: 'Fair' }
+  ];
+
+  function render() {
+    var rows = '', alerts = '';
+    fields.forEach(function (f) {
+      var dry = f.moisture < MOISTURE_LIMIT;
+      rows += '<tr class="' + (dry ? 'dry' : '') + '"><td>' + f.id + '</td><td>' + f.crop + '</td><td>' + f.moisture + '</td><td>' + f.water +
+        '</td><td>' + f.temp + '</td><td>' + f.status + '</td><td>' + f.next + '</td><td><span class="badge ' + f.health + '">' + f.health + '</span></td></tr>';
+      if (dry) alerts += '<div class="alert">IRRIGATION ALERT: ' + f.id + ' (' + f.crop + ') soil moisture ' + f.moisture + '% is below ' + MOISTURE_LIMIT + '%</div>';
+    });
+    document.getElementById('rows').innerHTML = rows;
+    document.getElementById('alerts').innerHTML = alerts || '<div class="alert ok">All fields have sufficient soil moisture.</div>';
+  }
+  render();
+</script>
+</body>
+</html>
